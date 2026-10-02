@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>XGT Shared Memory Gateway</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f3f6f9;
+      --panel: #ffffff;
+      --panel-soft: #f8fafc;
+      --text: #17202a;
+      --muted: #6b7785;
+      --line: #dce3ea;
+      --line-strong: #c8d0d9;
+      --accent: #1e78ff;
+      --accent-soft: #e9f2ff;
+      --green: #14a46f;
+      --green-soft: #e9f8f2;
+      --red: #d94b4b;
+      --red-soft: #fff0f0;
+      --orange: #e38b2c;
+      --shadow: 0 8px 28px rgba(33,48,63,.07);
+      --radius: 14px;
+    }
+
+    * { box-sizing: border-box; scrollbar-color: #8fa3b8 #edf2f6; scrollbar-width: thin; }
+    *::-webkit-scrollbar { width: 10px; height: 10px; }
+    *::-webkit-scrollbar-track { background: #edf2f6; }
+    *::-webkit-scrollbar-thumb { background: linear-gradient(180deg,#a8b8c8,#8096ac); border: 2px solid #edf2f6; border-radius: 999px; }
+    *::-webkit-scrollbar-thumb:hover { background: linear-gradient(180deg,#7faeff,#4f88d4); }
+    *::-webkit-scrollbar-corner { background: #edf2f6; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      font-family: Inter, Pretendard, "Noto Sans KR", "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    header {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      min-height: 64px;
+      padding: 0 28px;
+      background: rgba(255,255,255,.94);
+      backdrop-filter: blur(10px);
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    h1 { font-size: 20px; margin: 0; letter-spacing: -.35px; }
+    h2 { font-size: 14px; margin: 0 0 14px; color: #263545; }
+
+    main {
+      max-width: 1480px;
+      margin: 0 auto;
+      padding: 28px 32px 42px;
+    }
+
+    .auth { display: flex; gap: 8px; align-items: center; }
+    .auth input { width: 260px; }
+
+    .grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 16px; }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 18px;
+      box-shadow: var(--shadow);
+    }
+
+    .span-4 { grid-column: span 4; }
+    .span-6 { grid-column: span 6; }
+    .span-8 { grid-column: span 8; }
+    .span-12 { grid-column: span 12; }
+
+    .fields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+    .field { display: flex; flex-direction: column; gap: 6px; }
+    .wide { grid-column: 1 / -1; }
+
+    label {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    input, select, textarea, button { font: inherit; }
+
+    input, select, textarea {
+      width: 100%;
+      color: #263545;
+      background: #fff;
+      border: 1px solid var(--line-strong);
+      border-radius: 8px;
+      padding: 9px 10px;
+      outline: none;
+      transition: .15s ease;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      border-color: #7fb1f9;
+      box-shadow: 0 0 0 3px rgba(30,120,255,.08);
+    }
+
+    input[type=checkbox] { width: auto; accent-color: var(--accent); }
+    .check { flex-direction: row; align-items: center; padding-top: 21px; }
+
+    button {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      color: #344150;
+      padding: 9px 13px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 12px;
+      transition: .15s ease;
+    }
+
+    button:hover { background: #f6f8fa; }
+
+    button.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+      box-shadow: 0 4px 12px rgba(30,120,255,.2);
+    }
+    button.primary:hover { background: #126beb; }
+
+    button.danger {
+      background: #fff7f7;
+      border-color: #f1caca;
+      color: #bc3e3e;
+    }
+
+    .actions { display: flex; flex-wrap: wrap; gap: 9px; margin-top: 16px; }
+
+    .status-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 10px; }
+
+    .metric {
+      background: var(--panel-soft);
+      border: 1px solid #e6ebef;
+      border-radius: 10px;
+      padding: 14px;
+      min-height: 82px;
+    }
+
+    .metric .name { color: var(--muted); font-size: 10px; font-weight: 600; }
+    .metric .value { margin-top: 8px; font-size: 14px; font-weight: 700; color: #263545; word-break: break-all; }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      margin-top: 7px;
+      padding: 5px 9px;
+      border-radius: 999px;
+      background: #edf2f6;
+      color: #5b6877;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--red);
+      box-shadow: 0 0 0 3px rgba(217,75,75,.11);
+    }
+
+    .dot.ok {
+      background: var(--green);
+      box-shadow: 0 0 0 3px rgba(20,164,111,.11);
+    }
+
+    .muted { color: var(--muted); font-size: 11px; line-height: 1.55; }
+
+    .message {
+      min-height: 18px;
+      margin: 0 0 16px;
+      color: var(--muted);
+      font-size: 12px;
+      padding: 10px 12px;
+      border-radius: 9px;
+      background: #eef2f6;
+      border: 1px solid #e1e7ed;
+    }
+    .message.ok { color: #0b8a5b; background: var(--green-soft); border-color: #cfeee1; }
+    .message.bad { color: #c24343; background: var(--red-soft); border-color: #f3d3d3; }
+
+    code {
+      color: #2165c5;
+      background: #edf5ff;
+      padding: 1px 4px;
+      border-radius: 4px;
+    }
+
+    @media(max-width: 900px) {
+      .span-4,.span-6,.span-8 { grid-column: span 12; }
+      .auth { width: 100%; }
+      header { align-items: flex-start; flex-direction: column; padding: 14px; }
+      .auth input { width: 100%; }
+      main { padding: 20px 14px 34px; }
+    }
+
+    @media(max-width: 560px) {
+      .fields,.status-grid { grid-template-columns: 1fr; }
+      .check,.wide { grid-column: auto; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>XGT Shared Memory Gateway</h1>
+      <div class="pill"><span id="stateDot" class="dot"></span><span id="stateText">연결 확인 전</span></div>
+    </div>
+    <div class="auth">
+      <button id="connectBtn" class="primary">설정 불러오기</button>
+      <button id="saveBtn">검증 후 저장 · 즉시 적용</button>
+    </div>
+  </header>
+
+  <main>
+    <div id="message" class="message">설정을 불러오는 중...</div>
+    <div class="grid">
+      <section class="card span-12">
+        <h2>실시간 상태</h2>
+        <div class="status-grid">
+          <div class="metric"><div class="name">PLC 상태</div><div id="sPlcState" class="value">-</div></div>
+          <div class="metric"><div class="name">PLC 주소</div><div id="sEndpoint" class="value">-</div></div>
+          <div class="metric"><div class="name">재시도 대기</div><div id="sRetry" class="value">-</div></div>
+          <div class="metric"><div class="name">읽기 횟수</div><div id="sReads" class="value">0</div></div>
+          <div class="metric"><div class="name">쓰기 횟수</div><div id="sWrites" class="value">0</div></div>
+          <div class="metric"><div class="name">마지막 오류</div><div id="sError" class="value">없음</div></div>
+        </div>
+        <div class="actions">
+          <button id="reconnectBtn">PLC 즉시 재연결</button>
+          <button id="plcStartBtn">PLC 통신 켜기</button>
+          <button id="plcStopBtn" class="danger">PLC 통신 끄기</button>
+        </div>
+      </section>
+
+      <section class="card span-6">
+        <h2>PLC 연결</h2>
+        <div class="fields">
+          <div class="field check"><input id="plc_enabled" type="checkbox"><label for="plc_enabled">PLC 통신 사용</label></div>
+          <div class="field"><label for="plc_host">PLC IP / Host</label><input id="plc_host"></div>
+          <div class="field"><label for="plc_port">PLC TCP Port</label><input id="plc_port" type="number"></div>
+          <div class="field"><label for="connect_timeout">연결 제한시간 (초)</label><input id="connect_timeout" type="number" step="0.1"></div>
+          <div class="field"><label for="io_timeout">응답 제한시간 (초)</label><input id="io_timeout" type="number" step="0.1"></div>
+          <div class="field"><label for="retry_initial">최초 재시도 (ms)</label><input id="retry_initial" type="number"></div>
+          <div class="field"><label for="retry_max">최대 재시도 (ms)</label><input id="retry_max" type="number"></div>
+          <div class="field"><label for="retry_multiplier">재시도 배율</label><input id="retry_multiplier" type="number" step="0.1"></div>
+        </div>
+      </section>
+
+      <section class="card span-6">
+        <h2>연속 BYTE 읽기 / 쓰기</h2>
+        <div class="fields">
+          <div class="field check"><input id="read_enabled" type="checkbox"><label for="read_enabled">읽기 사용</label></div>
+          <div class="field"><label for="read_address">읽기 시작 주소</label><input id="read_address" placeholder="D0 또는 %DB0"></div>
+          <div class="field"><label for="read_count">읽기 바이트 수</label><input id="read_count" type="number" min="1" max="1400" step="1"></div>
+          <div class="field"><label for="read_word_count">읽기 워드 수</label><input id="read_word_count" type="number" min="0.5" max="700" step="0.5"></div>
+          <div class="field"><label for="read_interval">읽기 주기 (ms)</label><input id="read_interval" type="number"></div>
+          <div class="field check"><input id="write_enabled" type="checkbox"><label for="write_enabled">쓰기 사용</label></div>
+          <div class="field"><label for="write_address">쓰기 시작 주소</label><input id="write_address" placeholder="D100 또는 %DB200"></div>
+          <div class="field"><label for="write_count">쓰기 바이트 수</label><input id="write_count" type="number" min="1" max="1400" step="1"></div>
+          <div class="field"><label for="write_word_count">쓰기 워드 수</label><input id="write_word_count" type="number" min="0.5" max="700" step="0.5"></div>
+          <div class="field"><label for="write_interval">쓰기 확인/주기 (ms)</label><input id="write_interval" type="number"></div>
+          <div class="field"><label for="write_mode">쓰기 모드</label><select id="write_mode"><option value="on_change">값 커밋 시</option><option value="cyclic">주기 반복</option></select></div>
+          <div class="field check"><input id="write_startup" type="checkbox"><label for="write_startup">시작 즉시 현재 값 쓰기</label></div>
+          <div class="wide muted"><code>D1000</code>을 입력하면 연속 BYTE 주소 <code>%DB2000</code>으로 자동 변환됩니다. 기본 길이 100바이트 = 50워드입니다.</div>
+        </div>
+      </section>
+
+      <section class="card span-6">
+        <h2>공유 메모리</h2>
+        <div class="fields">
+          <div class="field wide"><label for="shm_name">공유 메모리 이름</label><input id="shm_name"></div>
+          <div class="field"><label for="shm_size">전체 크기 (byte)</label><input id="shm_size" type="number"></div>
+          <div class="field"><label for="shm_read_offset">읽기 데이터 Offset</label><input id="shm_read_offset" type="number"></div>
+          <div class="field"><label for="shm_write_offset">쓰기 데이터 Offset</label><input id="shm_write_offset" type="number"></div>
+          <div class="field check"><input id="shm_unlink" type="checkbox"><label for="shm_unlink">종료 시 제거</label></div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <script>
+    const $ = id => document.getElementById(id);
+    let timer = null;
+
+    function message(text, type='') { $('message').textContent = text; $('message').className = 'message ' + type; }
+    function n(id) { return Number($(id).value); }
+
+    function syncCount(sourceId, targetId, multiplier) {
+      const source = $(sourceId);
+      $(targetId).value = source.value === '' ? '' : Number(source.value) * multiplier;
+    }
+
+    async function api(path, options={}) {
+      const headers = Object.assign({}, options.headers || {});
+      if (options.body) headers['Content-Type'] = 'application/json';
+      const response = await fetch(path, Object.assign({}, options, {headers}));
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok || !body.ok) throw new Error(body.message || body.error || `HTTP ${response.status}`);
+      return body.result;
+    }
+
+    function fill(c) {
+      $('plc_enabled').checked = c.plc.enabled; $('plc_host').value = c.plc.host; $('plc_port').value = c.plc.port;
+      $('connect_timeout').value = c.plc.connect_timeout_s; $('io_timeout').value = c.plc.io_timeout_s;
+      $('retry_initial').value = c.plc.retry_initial_ms; $('retry_max').value = c.plc.retry_max_ms; $('retry_multiplier').value = c.plc.retry_multiplier;
+      $('read_enabled').checked = c.read.enabled; $('read_address').value = c.read.address; $('read_count').value = c.read.byte_count; $('read_interval').value = c.read.interval_ms;
+      $('write_enabled').checked = c.write.enabled; $('write_address').value = c.write.address; $('write_count').value = c.write.byte_count; $('write_interval').value = c.write.interval_ms;
+      syncCount('read_count', 'read_word_count', 0.5); syncCount('write_count', 'write_word_count', 0.5);
+      $('write_mode').value = c.write.mode; $('write_startup').checked = c.write.write_on_startup;
+      $('shm_name').value = c.shared_memory.name; $('shm_size').value = c.shared_memory.size; $('shm_read_offset').value = c.shared_memory.read_offset; $('shm_write_offset').value = c.shared_memory.write_offset; $('shm_unlink').checked = c.shared_memory.unlink_on_exit;
+    }
+
+    function patch() {
+      return {
+        plc:{enabled:$('plc_enabled').checked, host:$('plc_host').value.trim(), port:n('plc_port'), connect_timeout_s:n('connect_timeout'), io_timeout_s:n('io_timeout'), retry_initial_ms:n('retry_initial'), retry_max_ms:n('retry_max'), retry_multiplier:n('retry_multiplier')},
+        read:{enabled:$('read_enabled').checked, address:$('read_address').value.trim(), byte_count:n('read_count'), interval_ms:n('read_interval')},
+        write:{enabled:$('write_enabled').checked, address:$('write_address').value.trim(), byte_count:n('write_count'), interval_ms:n('write_interval'), mode:$('write_mode').value, write_on_startup:$('write_startup').checked},
+        shared_memory:{name:$('shm_name').value.trim(), size:n('shm_size'), read_offset:n('shm_read_offset'), write_offset:n('shm_write_offset'), unlink_on_exit:$('shm_unlink').checked}
+      };
+    }
+
+    async function load() {
+      const c = await api('/api/config'); fill(c); await status();
+      message('설정을 불러왔습니다.', 'ok');
+      if (timer) clearInterval(timer); timer = setInterval(() => status().catch(() => {}), 1000);
+    }
+
+    async function status() {
+      const s = await api('/api/status');
+      const connected = s.plc_state === 'connected';
+      $('stateDot').className = 'dot ' + (connected ? 'ok' : ''); $('stateText').textContent = connected ? 'PLC 연결됨' : `PLC ${s.plc_state}`;
+      $('sPlcState').textContent = s.plc_state; $('sEndpoint').textContent = s.plc_endpoint || '-'; $('sRetry').textContent = `${s.retry_delay_ms || 0} ms`;
+      $('sReads').textContent = s.read_count; $('sWrites').textContent = s.write_count; $('sError').textContent = s.last_error || '없음';
+    }
+
+    async function save() {
+      if (!window.confirm('현재 입력한 설정을 검증한 후 저장하고 즉시 적용하시겠습니까?')) return;
+      message('설정을 검증하고 적용하는 중...');
+      const result = await api('/api/config', {method:'PUT', body:JSON.stringify({patch:patch()})});
+      fill(result.config);
+      const note = result.restart_required.length ? ` 재시작 필요: ${result.restart_required.join(', ')}` : '';
+      message('저장하고 즉시 적용했습니다.' + note, 'ok');
+    }
+
+    async function plcEnabled(enabled) { await api('/api/plc/enabled', {method:'POST', body:JSON.stringify({enabled})}); await load(); }
+
+    $('connectBtn').onclick = () => load().catch(e => message(e.message, 'bad'));
+    $('saveBtn').onclick = () => save().catch(e => message(e.message, 'bad'));
+    $('reconnectBtn').onclick = () => api('/api/plc/reconnect', {method:'POST', body:'{}'}).then(() => message('재연결을 요청했습니다.', 'ok')).catch(e => message(e.message, 'bad'));
+    $('plcStartBtn').onclick = () => plcEnabled(true).catch(e => message(e.message, 'bad'));
+    $('plcStopBtn').onclick = () => plcEnabled(false).catch(e => message(e.message, 'bad'));
+    $('read_count').addEventListener('input', () => syncCount('read_count', 'read_word_count', 0.5));
+    $('read_word_count').addEventListener('input', () => syncCount('read_word_count', 'read_count', 2));
+    $('write_count').addEventListener('input', () => syncCount('write_count', 'write_word_count', 0.5));
+    $('write_word_count').addEventListener('input', () => syncCount('write_word_count', 'write_count', 2));
+    load().catch(e => message(e.message, 'bad'));
+  </script>
+</body>
+</html>

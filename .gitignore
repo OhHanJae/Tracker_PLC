@@ -1,0 +1,9 @@
+.venv/
+.venv-linux/
+__pycache__/
+*.py[cod]
+config.json
+logs/
+.idea/
+.vscode/
+tests

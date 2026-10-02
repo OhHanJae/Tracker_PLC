@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "plc": {
+    "enabled": true,
+    "host": "192.168.0.10",
+    "port": 2004,
+    "cpu_info": 160,
+    "slot": 0,
+    "base": 0,
+    "use_bcc": true,
+    "connect_timeout_s": 3.0,
+    "io_timeout_s": 2.0,
+    "retry_initial_ms": 500,
+    "retry_max_ms": 10000,
+    "retry_multiplier": 2.0
+  },
+  "read": {
+    "enabled": true,
+    "address": "D9000",
+    "byte_count": 200,
+    "interval_ms": 50
+  },
+  "write": {
+    "enabled": true,
+    "address": "D100",
+    "byte_count": 200,
+    "interval_ms": 200,
+    "mode": "cyclic",
+    "write_on_startup": false
+  },
+  "shared_memory": {
+    "name": "xgt_gateway_v1",
+    "size": 512,
+    "read_offset": 64,
+    "write_offset": 264,
+    "unlink_on_exit": true
+  },
+  "control": {
+    "host": "0.0.0.0",
+    "port": 5150,
+    "auth_token": "",
+    "max_request_bytes": 1048576
+  },
+  "web": {
+    "enabled": true,
+    "host": "0.0.0.0",
+    "port": 5051
+  },
+  "logging": {
+    "level": "INFO",
+    "file": "logs/xgt_gateway.log",
+    "max_bytes": 2000000,
+    "backup_count": 5
+  }
+}
