@@ -84,6 +84,13 @@
     .field { display: flex; flex-direction: column; gap: 6px; }
     .wide { grid-column: 1 / -1; }
 
+    .io-blocks { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+    .io-block { padding: 14px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-soft); }
+    .io-block h3 { margin: 0 0 12px; font-size: 13px; color: #263545; }
+    .io-block .fields { grid-template-columns: 1fr; }
+    .io-block .check { padding-top: 0; }
+    .io-help { margin-top: 12px; }
+
     label {
       color: var(--muted);
       font-size: 11px;
@@ -211,7 +218,7 @@
     }
 
     @media(max-width: 560px) {
-      .fields,.status-grid { grid-template-columns: 1fr; }
+      .fields,.status-grid,.io-blocks { grid-template-columns: 1fr; }
       .check,.wide { grid-column: auto; }
     }
   </style>
@@ -264,21 +271,31 @@
 
       <section class="card span-6">
         <h2>연속 BYTE 읽기 / 쓰기</h2>
-        <div class="fields">
-          <div class="field check"><input id="read_enabled" type="checkbox"><label for="read_enabled">읽기 사용</label></div>
-          <div class="field"><label for="read_address">읽기 시작 주소</label><input id="read_address" placeholder="D0 또는 %DB0"></div>
-          <div class="field"><label for="read_count">읽기 바이트 수</label><input id="read_count" type="number" min="1" max="1400" step="1"></div>
-          <div class="field"><label for="read_word_count">읽기 워드 수</label><input id="read_word_count" type="number" min="0.5" max="700" step="0.5"></div>
-          <div class="field"><label for="read_interval">읽기 주기 (ms)</label><input id="read_interval" type="number"></div>
-          <div class="field check"><input id="write_enabled" type="checkbox"><label for="write_enabled">쓰기 사용</label></div>
-          <div class="field"><label for="write_address">쓰기 시작 주소</label><input id="write_address" placeholder="D100 또는 %DB200"></div>
-          <div class="field"><label for="write_count">쓰기 바이트 수</label><input id="write_count" type="number" min="1" max="1400" step="1"></div>
-          <div class="field"><label for="write_word_count">쓰기 워드 수</label><input id="write_word_count" type="number" min="0.5" max="700" step="0.5"></div>
-          <div class="field"><label for="write_interval">쓰기 확인/주기 (ms)</label><input id="write_interval" type="number"></div>
-          <div class="field"><label for="write_mode">쓰기 모드</label><select id="write_mode"><option value="on_change">값 커밋 시</option><option value="cyclic">주기 반복</option></select></div>
-          <div class="field check"><input id="write_startup" type="checkbox"><label for="write_startup">시작 즉시 현재 값 쓰기</label></div>
-          <div class="wide muted"><code>D1000</code>을 입력하면 연속 BYTE 주소 <code>%DB2000</code>으로 자동 변환됩니다. 기본 길이 100바이트 = 50워드입니다.</div>
+        <div class="io-blocks">
+          <div class="io-block">
+            <h3>읽기 영역 설정</h3>
+            <div class="fields">
+              <div class="field check"><input id="read_enabled" type="checkbox"><label for="read_enabled">읽기 사용</label></div>
+              <div class="field"><label for="read_address">읽기 시작 주소</label><input id="read_address" placeholder="D0 또는 %DB0"></div>
+              <div class="field"><label for="read_count">읽기 영역 크기 (byte)</label><input id="read_count" type="number" min="1" max="1400" step="1"></div>
+              <div class="field"><label for="read_word_count">읽기 영역 크기 (word)</label><input id="read_word_count" type="number" min="0.5" max="700" step="0.5"></div>
+              <div class="field"><label for="read_interval">읽기 주기 (ms)</label><input id="read_interval" type="number"></div>
+            </div>
+          </div>
+          <div class="io-block">
+            <h3>쓰기 영역 설정</h3>
+            <div class="fields">
+              <div class="field check"><input id="write_enabled" type="checkbox"><label for="write_enabled">쓰기 사용</label></div>
+              <div class="field"><label for="write_address">쓰기 시작 주소</label><input id="write_address" placeholder="D100 또는 %DB200"></div>
+              <div class="field"><label for="write_count">쓰기 영역 크기 (byte)</label><input id="write_count" type="number" min="1" max="1400" step="1"></div>
+              <div class="field"><label for="write_word_count">쓰기 영역 크기 (word)</label><input id="write_word_count" type="number" min="0.5" max="700" step="0.5"></div>
+              <div class="field"><label for="write_interval">쓰기 확인/주기 (ms)</label><input id="write_interval" type="number"></div>
+              <div class="field"><label for="write_mode">쓰기 모드</label><select id="write_mode"><option value="on_change">값 커밋 시</option><option value="cyclic">주기 반복</option></select></div>
+              <div class="field check"><input id="write_startup" type="checkbox"><label for="write_startup">시작 즉시 현재 값 쓰기</label></div>
+            </div>
+          </div>
         </div>
+        <div class="muted io-help"><code>D1000</code>을 입력하면 연속 BYTE 주소 <code>%DB2000</code>으로 자동 변환됩니다. 기본 길이 100바이트 = 50워드입니다.</div>
       </section>
 
       <section class="card span-6">
