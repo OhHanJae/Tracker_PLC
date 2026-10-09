@@ -16,15 +16,15 @@
   },
   "read": {
     "enabled": true,
-    "address": "D9000",
+    "address": "D1000",
     "byte_count": 200,
     "interval_ms": 50
   },
   "write": {
     "enabled": true,
-    "address": "D100",
+    "address": "D1100",
     "byte_count": 200,
-    "interval_ms": 200,
+    "interval_ms": 50,
     "mode": "cyclic",
     "write_on_startup": false
   },

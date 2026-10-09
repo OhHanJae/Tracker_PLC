@@ -85,11 +85,12 @@ class PlcWorker:
             if not write_tracking_initialized:
                 try:
                     _, sequence = bridge.read_write_area()
+                    acknowledged = bridge.info()["write_ack_sequence"]
                 except Exception:
-                    sequence = 0
-                last_written_sequence = sequence
-                write_armed = bool(config["write"]["write_on_startup"])
-                if write_armed:
+                    sequence = acknowledged = 0
+                last_written_sequence = acknowledged
+                write_armed = bool(config["write"]["write_on_startup"]) or sequence != acknowledged
+                if config["write"]["write_on_startup"] and sequence == acknowledged:
                     # Force one startup write while preserving the normal
                     # sequence-change rule for all later writes.
                     last_written_sequence = (sequence - 2) & 0xFFFFFFFF
