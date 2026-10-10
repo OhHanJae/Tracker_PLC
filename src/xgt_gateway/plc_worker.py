@@ -31,6 +31,7 @@ class PlcWorker:
         self._reconfigure_event = threading.Event()
         self._reconnect_event = threading.Event()
         self._thread: threading.Thread | None = None
+        self._client: XgtTcpClient | None = None
 
     def start(self) -> None:
         if self._thread and self._thread.is_alive():
@@ -42,6 +43,8 @@ class PlcWorker:
     def stop(self) -> None:
         self._stop_event.set()
         self._wake_event.set()
+        if self._client:
+            self._client.close()
         if self._thread and self._thread.is_alive():
             self._thread.join(timeout=10.0)
 
@@ -61,6 +64,7 @@ class PlcWorker:
         last_written_sequence = 0
         write_armed = False
         write_tracking_initialized = False
+        self._shared_memory_provider().set_status(connected=False, read_ok=False, write_ok=False)
 
         while not self._stop_event.is_set():
             config = self._config_provider()
@@ -115,12 +119,15 @@ class PlcWorker:
                 try:
                     self._status.update(plc_state="connecting")
                     client = XgtTcpClient(plc_config)
+                    self._client = client
                     client.connect()
+                    if self._stop_event.is_set():
+                        break
                     retry_delay_ms = int(plc_config["retry_initial_ms"])
                     now = time.monotonic()
                     next_read = now
                     next_write = now
-                    bridge.set_status(connected=True, error_code=0)
+                    bridge.set_status(connected=True, read_ok=False, write_ok=False, error_code=0)
                     self._status.clear_error()
                     self._status.update(
                         plc_state="connected",
@@ -132,6 +139,9 @@ class PlcWorker:
                     if client:
                         client.close()
                     client = None
+                    self._client = None
+                    if self._stop_event.is_set():
+                        break
                     retry_delay_ms = self._next_retry(retry_delay_ms, plc_config)
                     self._handle_connection_error(exc, bridge, retry_delay_ms)
                     self._wait(retry_delay_ms / 1000.0)
@@ -180,12 +190,16 @@ class PlcWorker:
                 if client:
                     client.close()
                 client = None
+                self._client = None
+                if self._stop_event.is_set():
+                    break
                 retry_delay_ms = self._next_retry(retry_delay_ms, plc_config)
                 self._handle_connection_error(exc, bridge, retry_delay_ms)
                 self._wait(retry_delay_ms / 1000.0)
 
         if client:
             client.close()
+        self._client = None
         try:
             self._shared_memory_provider().set_status(connected=False)
         except Exception:

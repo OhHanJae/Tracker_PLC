@@ -123,6 +123,7 @@ class SharedMemoryBridge:
             old = self._shm
             old_config = self._config
             if old is not None:
+                self.set_status(connected=False, read_ok=False, write_ok=False)
                 old.close()
                 if old_config.get("unlink_on_exit"):
                     try:

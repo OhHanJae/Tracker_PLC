@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import socket
 import threading
+import time
 from typing import Any
 
 from .errors import XgtProtocolError
@@ -40,9 +41,13 @@ class XgtTcpClient:
             (self._config["host"], self._config["port"]),
             timeout=float(self._config["connect_timeout_s"]),
         )
-        sock.settimeout(float(self._config["io_timeout_s"]))
-        sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-        self._enable_keepalive(sock)
+        try:
+            sock.settimeout(float(self._config["io_timeout_s"]))
+            sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+            self._enable_keepalive(sock)
+        except Exception:
+            sock.close()
+            raise
         self._socket = sock
 
     def close(self) -> None:
@@ -95,25 +100,33 @@ class XgtTcpClient:
         if self._socket is None:
             raise ConnectionError("PLC socket is not connected")
         try:
+            timeout = float(self._config["io_timeout_s"])
+            deadline = time.monotonic() + timeout
+            self._socket.settimeout(timeout)
             self._socket.sendall(request)
-            raw_header = self._recv_exact(HEADER_SIZE)
+            raw_header = self._recv_exact(HEADER_SIZE, deadline)
             validate_bcc = bool(self._config.get("use_bcc", True))
             header = parse_header(raw_header, validate_bcc=validate_bcc)
             if header.length > 65_535:
                 raise XgtProtocolError(f"Invalid XGT payload length: {header.length}")
-            payload = self._recv_exact(header.length)
+            payload = self._recv_exact(header.length, deadline)
             return split_frame(raw_header + payload, validate_bcc=validate_bcc)
         except Exception:
             self.close()
             raise
 
-    def _recv_exact(self, size: int) -> bytes:
-        if self._socket is None:
+    def _recv_exact(self, size: int, deadline: float) -> bytes:
+        sock = self._socket
+        if sock is None:
             raise ConnectionError("PLC socket is not connected")
         chunks: list[bytes] = []
         remaining = size
         while remaining:
-            chunk = self._socket.recv(remaining)
+            remaining_time = deadline - time.monotonic()
+            if remaining_time <= 0:
+                raise TimeoutError("PLC transaction timed out")
+            sock.settimeout(remaining_time)
+            chunk = sock.recv(remaining)
             if not chunk:
                 raise ConnectionError("PLC closed the TCP connection")
             chunks.append(chunk)

@@ -26,4 +26,4 @@ fi
 
 echo "[2/2] Starting XGT Gateway..."
 export PYTHONUNBUFFERED=1
-exec "$venv_python" gateway.py
+exec "$venv_python" gateway.py "$@"

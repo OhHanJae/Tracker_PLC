@@ -37,7 +37,7 @@
   },
   "control": {
     "host": "0.0.0.0",
-    "port": 5150,
+    "port": 15150,
     "auth_token": "",
     "max_request_bytes": 1048576
   },

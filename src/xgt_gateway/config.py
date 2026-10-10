@@ -37,15 +37,15 @@ def default_config() -> dict[str, Any]:
         },
         "read": {
             "enabled": True,
-            "address": "D9000",
+            "address": "D1000",
             "byte_count": 200,
             "interval_ms": 50,
         },
         "write": {
             "enabled": True,
-            "address": "D100",
+            "address": "D1100",
             "byte_count": 200,
-            "interval_ms": 200,
+            "interval_ms": 50,
             "mode": "cyclic",
             "write_on_startup": False,
         },
@@ -58,7 +58,7 @@ def default_config() -> dict[str, Any]:
         },
         "control": {
             "host": "0.0.0.0",
-            "port": 5150,
+            "port": 15150,
             "auth_token": "",
             "max_request_bytes": 1_048_576,
         },

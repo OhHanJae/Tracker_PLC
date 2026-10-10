@@ -118,6 +118,10 @@ class GatewayService:
                         rollback_errors.append(f"web server: {rollback_exc}")
                 if rollback_errors:
                     LOGGER.critical("Configuration rollback was incomplete: %s", "; ".join(rollback_errors))
+                if shm_changed:
+                    # Reopening the restored buffer clears its connection
+                    # flags and sequences, so restart the worker's tracking.
+                    self._worker.request_reconfigure()
                 raise
 
             worker_changed = any(

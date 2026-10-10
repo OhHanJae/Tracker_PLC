@@ -5,14 +5,14 @@
 - Python 3.10 이상
 - PLC와 Gateway 사이 TCP 통신 허용
 - PLC Ethernet 모듈에서 XGT 전용 서버가 활성화되어 있고 IP/Port가 설정과 일치할 것
-- 100바이트 범위가 실제 PLC 디바이스 범위를 넘지 않을 것
+- 설정된 읽기/쓰기 범위(기본 각각 200바이트)가 실제 PLC 디바이스 범위를 넘지 않을 것
 
 ## Windows
 
 개발/시험은 `run_gateway.bat`으로 충분합니다. 상시 운용은 Windows 작업 스케줄러에 아래 항목을 등록하는 방식을 권장합니다.
 
 1. 트리거: 시스템 시작 시
-2. 프로그램: 프로젝트의 `.venv\Scripts\python.exe`
+2. 프로그램: 설치된 Python 3.10+ `python.exe`의 절대 경로 (별도 `.venv`를 만든 경우 그 인터프리터)
 3. 인수: `gateway.py --config config.json`
 4. 시작 위치: 프로젝트 폴더 절대 경로
 5. 실패 시 1분 뒤 재시작 설정
@@ -21,7 +21,7 @@
 
 ## Ubuntu / Debian
 
-먼저 한 번 실행해 `.venv`와 `config.json`을 만듭니다.
+먼저 한 번 실행해 `.venv-linux`와 `config.json`을 만듭니다. RDK X5 3.5 이미지에서도 Python 3.10 이상과 `python3-venv`가 필요하며 Gateway 서비스에는 GUI가 필요하지 않습니다.
 
 ```bash
 chmod +x run_gateway.sh
@@ -43,7 +43,7 @@ Type=simple
 User=xgtgateway
 Group=xgtgateway
 WorkingDirectory=/opt/xgt-gateway
-ExecStart=/opt/xgt-gateway/.venv/bin/python /opt/xgt-gateway/gateway.py --config /opt/xgt-gateway/config.json
+ExecStart=/opt/xgt-gateway/.venv-linux/bin/python /opt/xgt-gateway/gateway.py --config /opt/xgt-gateway/config.json
 Restart=on-failure
 RestartSec=3
 
@@ -59,7 +59,7 @@ sudo systemctl enable --now xgt-gateway.service
 sudo systemctl status xgt-gateway.service
 ```
 
-`User`, `Group`, 경로는 실제 환경에 맞게 바꿉니다. `config.json`과 로그 폴더에 해당 사용자의 읽기/쓰기 권한이 필요합니다.
+`User`, `Group`, 경로는 실제 환경에 맞게 바꿉니다. `config.json`과 로그 폴더에 해당 사용자의 읽기/쓰기 권한이 필요합니다. Core와 Gateway는 동일 호스트의 동일 Linux 사용자로 실행해 POSIX 공유 메모리를 읽고 쓸 수 있어야 합니다. Windows에서도 같은 사용자 세션으로 실행합니다.
 
 ## 네트워크 점검
 
@@ -72,7 +72,7 @@ nc -vz 192.168.0.10 2004
 설정 PC에서 Gateway TCP 설정 서버 확인:
 
 ```bash
-nc -vz GATEWAY_IP 8765
+nc -vz GATEWAY_IP 15150
 ```
 
 연결은 되는데 읽기 NAK가 발생하면 다음 순서로 확인합니다.
@@ -81,7 +81,7 @@ nc -vz GATEWAY_IP 8765
 2. CPU 계열(`cpu_info`, 기본 XGK `0xA0`)
 3. Base/Slot 값
 4. 연속 BYTE 주소 환산: `D1000` → `%DB2000`
-5. 요청 범위: 시작 주소부터 100바이트가 유효한지
+5. 요청 범위: 시작 주소부터 설정된 바이트 수(기본 200바이트)가 유효한지
 6. PLC 운전 상태와 Ethernet 모듈 진단 로그
 
 ## 로그

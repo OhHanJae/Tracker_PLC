@@ -17,7 +17,7 @@ from xgt_gateway.control_client import request  # noqa: E402
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=8765)
+    parser.add_argument("--port", type=int, default=15150)
     args = parser.parse_args()
     result = request(
         args.host,

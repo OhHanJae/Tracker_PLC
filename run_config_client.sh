@@ -31,4 +31,4 @@ if ! "$venv_python" -c 'import PySide6' >/dev/null 2>&1; then
 fi
 
 echo "[3/3] Starting XGT Gateway Config..."
-exec "$venv_python" config_client.py
+exec "$venv_python" config_client.py "$@"
