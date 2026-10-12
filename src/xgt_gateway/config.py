@@ -124,6 +124,23 @@ def validate_config(config: dict[str, Any]) -> dict[str, Any]:
 
     # Reject unknown/missing top-level and nested keys by merging onto defaults.
     merged = _deep_merge(default_config(), config)
+    if os.environ.get("CORE_MANAGED_PROCESS") == "1":
+        # Process Manager owns service listeners while managed. Reapply these
+        # values on every config update so the Web UI cannot move the listener.
+        for section, prefix in (("control", "TCP"), ("web", "HTTP")):
+            host = os.environ.get(f"CORE_{prefix}_HOST", "").strip()
+            if not host:
+                raise ConfigurationError(f"CORE_{prefix}_HOST is required for managed startup")
+            try:
+                port = int(os.environ[f"CORE_{prefix}_PORT"])
+            except (KeyError, ValueError) as exc:
+                raise ConfigurationError(f"CORE_{prefix}_PORT must be an integer") from exc
+            merged[section].update(host=host, port=port)
+        if "CORE_HTTP_ENABLED" in os.environ:
+            enabled = os.environ["CORE_HTTP_ENABLED"]
+            if enabled not in {"0", "1"}:
+                raise ConfigurationError("CORE_HTTP_ENABLED must be 0 or 1")
+            merged["web"]["enabled"] = enabled == "1"
     if set(config) != set(merged):
         raise ConfigurationError("Configuration is missing required top-level sections")
     for section in merged:
