@@ -40,13 +40,19 @@ class PlcWorker:
         self._thread = threading.Thread(target=self._run, name="xgt-plc-worker", daemon=True)
         self._thread.start()
 
-    def stop(self) -> None:
+    @property
+    def running(self) -> bool:
+        return self._thread is not None and self._thread.is_alive()
+
+    def stop(self, timeout_s: float = 10.0) -> None:
         self._stop_event.set()
         self._wake_event.set()
         if self._client:
             self._client.close()
         if self._thread and self._thread.is_alive():
-            self._thread.join(timeout=10.0)
+            self._thread.join(timeout=timeout_s)
+            if self._thread.is_alive():
+                raise TimeoutError("PLC worker did not stop; shared memory must remain open")
 
     def request_reconfigure(self) -> None:
         self._reconfigure_event.set()

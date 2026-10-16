@@ -23,6 +23,8 @@ class GatewayService:
         self._store = config_store
         self._config = copy.deepcopy(config)
         self._lock = threading.RLock()
+        self._apply_lock = threading.RLock()
+        self._stopping = False
         self.status = RuntimeStatus()
         self._bridge = SharedMemoryBridge(
             config["shared_memory"], config["read"]["byte_count"], config["write"]["byte_count"]
@@ -38,31 +40,34 @@ class GatewayService:
         self._web: WebServer | None = None
 
     def start(self) -> None:
-        self._worker.start()
-        self._control.start()
-        address = self._control.address
-        self.status.update(
-            control_running=True,
-            control_endpoint=f"{address[0]}:{address[1]}" if address else None,
-        )
-        try:
-            self._apply_web_config(self.config_snapshot()["web"])
-        except Exception as exc:
-            # Keep the TCP control server alive so the port can be corrected
-            # remotely even when the configured HTTP port is unavailable.
-            LOGGER.error("Web server failed to start: %s", exc)
-            self.status.error(f"Web server failed to start: {exc}")
-            self.status.update(web_running=False, web_url=None)
+        with self._apply_lock:
+            self._stopping = False
+            self._worker.start()
+            self._control.start()
+            address = self._control.address
+            self.status.update(
+                control_running=True,
+                control_endpoint=f"{address[0]}:{address[1]}" if address else None,
+            )
+            try:
+                self._apply_web_config(self.config_snapshot()["web"])
+            except Exception as exc:
+                # Keep TCP available so a failed HTTP listener can be retried.
+                LOGGER.error("Web server failed to start: %s", exc)
+                self.status.error(f"Web server failed to start: {exc}")
+                self.status.update(web_running=False, web_url=None)
 
     def stop(self) -> None:
-        if self._web:
-            self._web.stop()
-            self._web = None
-        self.status.update(web_running=False, web_url=None)
-        self._control.stop()
-        self.status.update(control_running=False, control_endpoint=None)
-        self._worker.stop()
-        self._bridge.close()
+        with self._apply_lock:
+            self._stopping = True
+            if self._web:
+                self._web.stop()
+                self._web = None
+            self.status.update(web_running=False, web_url=None)
+            self._control.stop()
+            self.status.update(control_running=False, control_endpoint=None)
+            self._worker.stop()
+            self._bridge.close()
 
     def config_snapshot(self) -> dict[str, Any]:
         with self._lock:
@@ -77,7 +82,9 @@ class GatewayService:
         return self._bridge
 
     def update_config(self, patch: dict[str, Any]) -> dict[str, Any]:
-        with self._lock:
+        with self._apply_lock:
+            if self._stopping:
+                raise RuntimeError("Gateway is stopping")
             before = copy.deepcopy(self._config)
             updated = self._store.preview_update(patch)
             shm_changed = (
@@ -85,51 +92,56 @@ class GatewayService:
                 or before["read"]["byte_count"] != updated["read"]["byte_count"]
                 or before["write"]["byte_count"] != updated["write"]["byte_count"]
             )
-            web_changed = before["web"] != updated["web"]
-            try:
-                if shm_changed:
-                    self._bridge.reconfigure(
-                        updated["shared_memory"],
-                        updated["read"]["byte_count"],
-                        updated["write"]["byte_count"],
-                    )
-                if web_changed:
-                    self._apply_web_config(updated["web"])
-                # Persist only after runtime resources accepted the new setup.
-                self._store.replace(updated)
-                self._config = updated
-            except Exception:
-                LOGGER.exception("Configuration apply failed; restoring previous runtime configuration")
-                self._config = before
-                rollback_errors: list[str] = []
-                if shm_changed:
-                    try:
-                        self._bridge.reconfigure(
-                            before["shared_memory"],
-                            before["read"]["byte_count"],
-                            before["write"]["byte_count"],
-                        )
-                    except Exception as rollback_exc:
-                        rollback_errors.append(f"shared memory: {rollback_exc}")
-                if web_changed:
-                    try:
-                        self._apply_web_config(before["web"])
-                    except Exception as rollback_exc:
-                        rollback_errors.append(f"web server: {rollback_exc}")
-                if rollback_errors:
-                    LOGGER.critical("Configuration rollback was incomplete: %s", "; ".join(rollback_errors))
-                if shm_changed:
-                    # Reopening the restored buffer clears its connection
-                    # flags and sequences, so restart the worker's tracking.
-                    self._worker.request_reconfigure()
-                raise
-
+            web_changed = (before["web"] != updated["web"]
+                           or updated["web"]["enabled"] and self._web is None)
             worker_changed = any(
                 before[section] != updated[section]
                 for section in ("plc", "read", "write", "shared_memory")
             )
-            if worker_changed:
-                self._worker.request_reconfigure()
+            restart_worker = worker_changed and self._worker.running
+            # Never join while holding _lock: the worker reads config under it.
+            if restart_worker:
+                self._worker.stop()
+            resume_worker = restart_worker
+            try:
+                with self._lock:
+                    if shm_changed:
+                        self._bridge.reconfigure(
+                            updated["shared_memory"],
+                            updated["read"]["byte_count"],
+                            updated["write"]["byte_count"],
+                        )
+                    if web_changed:
+                        self._apply_web_config(updated["web"])
+                    # Persist only after runtime resources accepted the setup.
+                    self._store.replace(updated)
+                    self._config = updated
+            except Exception:
+                LOGGER.exception("Configuration apply failed; restoring previous runtime configuration")
+                rollback_errors: list[str] = []
+                with self._lock:
+                    self._config = before
+                    if shm_changed:
+                        try:
+                            self._bridge.reconfigure(
+                                before["shared_memory"],
+                                before["read"]["byte_count"],
+                                before["write"]["byte_count"],
+                            )
+                        except Exception as rollback_exc:
+                            rollback_errors.append(f"shared memory: {rollback_exc}")
+                    if web_changed:
+                        try:
+                            self._apply_web_config(before["web"])
+                        except Exception as rollback_exc:
+                            rollback_errors.append(f"web server: {rollback_exc}")
+                if rollback_errors:
+                    resume_worker = False
+                    LOGGER.critical("Configuration rollback was incomplete: %s", "; ".join(rollback_errors))
+                raise
+            finally:
+                if resume_worker:
+                    self._worker.start()
 
             restart_required: list[str] = []
             if before["control"] != updated["control"]:
@@ -161,7 +173,10 @@ class GatewayService:
                 raise ValueError("params.enabled must be true or false")
             return self.update_config({"plc": {"enabled": enabled}})
         if command == "reconnect_plc":
-            self._worker.request_reconnect()
+            with self._apply_lock:
+                if self._stopping:
+                    raise RuntimeError("Gateway is stopping")
+                self._worker.request_reconnect()
             return {"requested": True}
         if command == "get_shared_memory":
             return self._bridge.info()
@@ -219,6 +234,7 @@ class GatewayService:
         if self._web:
             self._web.stop()
             self._web = None
+        self.status.update(web_running=False, web_url=None)
         if config["enabled"]:
             candidate = WebServer(
                 config["host"], config["port"], self.dispatch_http
@@ -231,8 +247,8 @@ class GatewayService:
                 web_running=True,
                 web_url=f"http://{display_host}:{address[1]}/" if address else None,
             )
-        else:
-            self.status.update(web_running=False, web_url=None)
+            if str(self.status.snapshot().get("last_error") or "").startswith("Web server failed to start:"):
+                self.status.clear_error()
 
     def _max_control_request(self) -> int:
         return int(self.config_snapshot()["control"]["max_request_bytes"])

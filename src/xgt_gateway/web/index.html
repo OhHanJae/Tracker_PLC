@@ -315,6 +315,7 @@
   <script>
     const $ = id => document.getElementById(id);
     let timer = null;
+    let statusPending = false;
 
     function message(text, type='') { $('message').textContent = text; $('message').className = 'message ' + type; }
     function n(id) { return Number($(id).value); }
@@ -360,7 +361,22 @@
     }
 
     async function status() {
-      const s = await api('/api/status');
+      if (statusPending) return;
+      statusPending = true;
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 3000);
+      let s;
+      try {
+        s = await api('/api/status', {signal:controller.signal});
+      } catch (error) {
+        $('stateDot').className = 'dot'; $('stateText').textContent = 'Gateway 연결 확인 실패';
+        $('sPlcState').textContent = '확인 불가';
+        $('sError').textContent = error.name === 'AbortError' ? '상태 응답 시간 초과' : error.message;
+        throw error;
+      } finally {
+        clearTimeout(timeout);
+        statusPending = false;
+      }
       const connected = s.plc_state === 'connected';
       $('stateDot').className = 'dot ' + (connected ? 'ok' : ''); $('stateText').textContent = connected ? 'PLC 연결됨' : `PLC ${s.plc_state}`;
       $('sPlcState').textContent = s.plc_state; $('sEndpoint').textContent = s.plc_endpoint || '-'; $('sRetry').textContent = `${s.retry_delay_ms || 0} ms`;
