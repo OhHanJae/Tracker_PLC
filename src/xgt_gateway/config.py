@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import ipaddress
 import json
 import os
 import tempfile
@@ -131,6 +132,14 @@ def validate_config(config: dict[str, Any]) -> dict[str, Any]:
             host = os.environ.get(f"CORE_{prefix}_HOST", "").strip()
             if not host:
                 raise ConfigurationError(f"CORE_{prefix}_HOST is required for managed startup")
+            if section == "web":
+                # Core's loopback probe address must not restrict the Web UI to this machine.
+                try:
+                    loopback = ipaddress.ip_address(host.strip("[]")).is_loopback
+                except ValueError:
+                    loopback = host.lower() == "localhost"
+                if loopback:
+                    host = "0.0.0.0"
             try:
                 port = int(os.environ[f"CORE_{prefix}_PORT"])
             except (KeyError, ValueError) as exc:
