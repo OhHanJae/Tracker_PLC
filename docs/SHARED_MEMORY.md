@@ -24,15 +24,14 @@ Gateway는 Python `multiprocessing.shared_memory`를 사용합니다. 기본 이
 | 48 | 8 | `uint64` | last_read_time_ns | Unix epoch nanoseconds |
 | 56 | 8 | `uint64` | last_write_time_ns | Unix epoch nanoseconds |
 
-기본 데이터 배치는 다음과 같습니다.
+현재 `default_config()`의 기본 데이터 배치는 다음과 같습니다. RX/TX는 각각 200바이트(100 WORD)입니다. 실제 접속에서는 Header의 Offset과 길이를 읽어 사용하며, 저장된 설정은 기본값과 다를 수 있습니다.
 
 | 영역 | Offset | 길이 |
 |---|---:|---:|
 | Header | 0 | 64 |
-| PLC → 앱 RX | 64 | 100 |
-| 예약 여유 | 164 | 92 |
-| 앱 → PLC TX | 256 | 100 |
-| 예약 여유 | 356 | 156 |
+| PLC → 앱 RX | 64 | 200 |
+| 앱 → PLC TX | 264 | 200 |
+| 예약 여유 | 464 | 48 |
 
 설정 변경 시 RX/TX가 겹치거나 전체 크기를 벗어나면 저장을 거부합니다.
 
@@ -74,10 +73,9 @@ Gateway는 데이터를 복사하는 동안 `read_sequence`를 홀수로 두고,
 ```python
 from xgt_gateway.shared_memory_bridge import SharedMemoryClient
 
-payload = bytes([0x12, 0x34]) + bytes(98)
-
 with SharedMemoryClient("xgt_gateway_v1") as shm:
     latest_plc_data = shm.read_plc_data()
+    payload = bytes([0x12, 0x34]) + bytes(198)  # 기본 TX 200바이트
     committed = shm.write_plc_data(payload)
     print("TX sequence:", committed)
     print("ACK:", shm.write_acknowledged())

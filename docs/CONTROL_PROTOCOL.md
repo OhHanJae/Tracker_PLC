@@ -43,7 +43,7 @@ Gateway는 PySide6 설정 클라이언트와 웹 화면을 위해 TCP 제어 서
 | `read_shared_memory` | `{"area":"read"}` | `read` 또는 `write` 영역을 HEX로 조회 |
 | `write_shared_memory` | `{"hex":"00 01 ..."}` | TX 영역에 정확한 길이의 데이터를 커밋 |
 
-부분 설정 변경 예:
+부분 설정 변경 예(현재 기본 읽기 길이와 주기를 사용):
 
 ```json
 {
@@ -59,8 +59,8 @@ Gateway는 PySide6 설정 클라이언트와 웹 화면을 위해 TCP 제어 서
       },
       "read": {
         "address": "D1000",
-        "byte_count": 100,
-        "interval_ms": 100
+        "byte_count": 200,
+        "interval_ms": 50
       }
     }
   }
