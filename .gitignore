@@ -7,3 +7,6 @@ logs/
 .idea/
 .vscode/
 tests
+!/tests/
+/tests/*
+!/tests/test_functional_corrections.py

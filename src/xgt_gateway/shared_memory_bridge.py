@@ -10,6 +10,7 @@ from multiprocessing import shared_memory
 from typing import Any
 
 from .errors import ConfigurationError
+from .tx_writer_lock import TxWriterLock
 
 MAGIC = b"XGSM"
 LAYOUT_VERSION = 1
@@ -172,7 +173,7 @@ class SharedMemoryBridge:
         payload = bytes(data)
         if len(payload) != self._write_length:
             raise ValueError(f"Write payload must be {self._write_length} bytes")
-        with self._lock:
+        with self._lock, TxWriterLock(self.name):
             shm = self._require_open()
             sequence = self._begin_write(shm.buf, OFF_WRITE_SEQUENCE)
             start = self._config["write_offset"]
