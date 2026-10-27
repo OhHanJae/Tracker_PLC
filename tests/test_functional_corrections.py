@@ -4,7 +4,7 @@ import unittest
 import uuid
 
 from xgt_gateway.control_server import ControlServer
-from xgt_gateway.shared_memory_bridge import SharedMemoryBridge
+from xgt_gateway.shared_memory_bridge import SharedMemoryBridge, SharedMemoryClient
 from xgt_gateway.tx_writer_lock import TxWriterLock
 
 
@@ -33,6 +33,31 @@ class FunctionalCorrectionsTests(unittest.TestCase):
             bridge.commit_write(b'\x01' * 200)
             self.assertEqual(bridge.read_write_area()[0], b'\x01' * 200)
         finally:
+            bridge.close(unlink=True)
+
+    def test_external_client_cannot_overwrite_core_or_release_writer_before_ack(self):
+        name = 'client-tx-' + uuid.uuid4().hex
+        bridge = SharedMemoryBridge({'name': name, 'size': 512, 'read_offset': 64, 'write_offset': 264,
+                                     'unlink_on_exit': True}, 200, 200)
+        client = SharedMemoryClient(name)
+        try:
+            bridge.publish_read(b'R' * 200)
+            with TxWriterLock(name):
+                self.assertEqual(client.read_plc_data(), b'R' * 200)
+                with self.assertRaises(OSError):
+                    client.write_plc_data(b'X' * 200)
+                self.assertEqual(bridge.read_write_area(), (b'\0' * 200, 0))
+            sequence = client.write_plc_data(b'A' * 200)
+            self.assertEqual(bridge.read_write_area(), (b'A' * 200, sequence))
+            self.assertFalse(client.write_acknowledged())
+            with self.assertRaises(OSError):
+                bridge.commit_write(b'B' * 200)
+            bridge.acknowledge_write(sequence)
+            self.assertTrue(client.write_acknowledged())
+            client.close()
+            bridge.commit_write(b'B' * 200)
+        finally:
+            client.close()
             bridge.close(unlink=True)
 
     def test_bad_json_and_idle_connection_are_isolated_and_stop_closes_clients(self):

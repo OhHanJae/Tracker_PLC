@@ -329,10 +329,14 @@ class SharedMemoryClient:
         # client handles on POSIX so a short-lived client does not unlink the
         # gateway-owned segment when it exits.
         self._shm = _open_shared_memory(name=name, create=False, track=False)
+        self._write_lock = threading.RLock()
+        self._tx_writer_lock = TxWriterLock(self._shm.name)
         self._validate()
 
     def close(self) -> None:
-        self._shm.close()
+        with self._write_lock:
+            self._tx_writer_lock.close()
+            self._shm.close()
 
     def layout(self) -> dict[str, int | str]:
         buf = self._shm.buf
@@ -354,15 +358,19 @@ class SharedMemoryClient:
         length = int(layout["write_length"])
         if len(data) != length:
             raise ValueError(f"Expected exactly {length} bytes")
-        buf = self._shm.buf
-        current = struct.unpack_from("<I", buf, OFF_WRITE_SEQUENCE)[0]
-        odd = ((current + 1) if not (current & 1) else (current + 2)) & 0xFFFFFFFF
-        struct.pack_into("<I", buf, OFF_WRITE_SEQUENCE, odd)
-        offset = int(layout["write_offset"])
-        buf[offset : offset + length] = data
-        final = (odd + 1) & 0xFFFFFFFF
-        struct.pack_into("<I", buf, OFF_WRITE_SEQUENCE, final)
-        return final
+        with self._write_lock:
+            # Keep ownership until close so another producer cannot replace
+            # this payload while the caller waits for its PLC acknowledgement.
+            self._tx_writer_lock.acquire()
+            buf = self._shm.buf
+            current = struct.unpack_from("<I", buf, OFF_WRITE_SEQUENCE)[0]
+            odd = ((current + 1) if not (current & 1) else (current + 2)) & 0xFFFFFFFF
+            struct.pack_into("<I", buf, OFF_WRITE_SEQUENCE, odd)
+            offset = int(layout["write_offset"])
+            buf[offset : offset + length] = data
+            final = (odd + 1) & 0xFFFFFFFF
+            struct.pack_into("<I", buf, OFF_WRITE_SEQUENCE, final)
+            return final
 
     def write_acknowledged(self) -> bool:
         buf = self._shm.buf
