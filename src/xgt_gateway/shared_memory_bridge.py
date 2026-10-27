@@ -35,6 +35,8 @@ OFF_LAST_WRITE_NS = 56
 FLAG_PLC_CONNECTED = 1 << 0
 FLAG_LAST_READ_OK = 1 << 1
 FLAG_LAST_WRITE_OK = 1 << 2
+WRITE_GATE_OFF = b"CWG0"
+WRITE_GATE_ON = b"CWG1"
 
 
 def _open_shared_memory(*, name: str, create: bool, size: int | None = None, track: bool = True) -> shared_memory.SharedMemory:
@@ -193,6 +195,25 @@ class SharedMemoryBridge:
             shm = self._require_open()
             struct.pack_into("<I", shm.buf, OFF_WRITE_ACK_SEQUENCE, sequence & 0xFFFFFFFF)
             struct.pack_into("<Q", shm.buf, OFF_LAST_WRITE_NS, time.time_ns())
+
+    def controller_write_enabled(self) -> bool:
+        """Honor a Core-owned gate; producers without the extension stay compatible."""
+        with self._lock:
+            shm = self._require_open()
+            offset = (max(self._config["read_offset"] + self._read_length,
+                          self._config["write_offset"] + self._write_length) + 3) & ~3
+            if offset + 4 > min(self._config["size"], len(shm.buf)):
+                return True
+            gate = bytes(shm.buf[offset:offset + 4])
+            if gate == WRITE_GATE_OFF:
+                return False
+            if gate != WRITE_GATE_ON:
+                return True
+            flags = struct.unpack_from("<I", shm.buf, OFF_STATUS_FLAGS)[0]
+            if flags & (FLAG_PLC_CONNECTED | FLAG_LAST_READ_OK) != (FLAG_PLC_CONNECTED | FLAG_LAST_READ_OK):
+                return False
+            data, _ = self.read_read_area()
+            return bool(data and data[0] & 1)
 
     def set_status(self, *, connected: bool | None = None, read_ok: bool | None = None, write_ok: bool | None = None, error_code: int | None = None) -> None:
         with self._lock:

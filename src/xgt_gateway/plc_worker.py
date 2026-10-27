@@ -70,6 +70,7 @@ class PlcWorker:
         last_written_sequence = 0
         write_armed = False
         write_tracking_initialized = False
+        paused_write_sequence: int | None = None
         self._shared_memory_provider().set_status(connected=False, read_ok=False, write_ok=False)
 
         while not self._stop_event.is_set():
@@ -84,6 +85,7 @@ class PlcWorker:
                 client = None
                 next_read = next_write = 0.0
                 write_tracking_initialized = False
+                paused_write_sequence = None
 
             if self._reconnect_event.is_set():
                 self._reconnect_event.clear()
@@ -169,18 +171,28 @@ class PlcWorker:
 
                 write_config = config["write"]
                 if write_config["enabled"] and now >= next_write:
+                    write_enabled = bridge.controller_write_enabled()
                     write_data, write_sequence = bridge.read_write_area()
                     sequence_changed = write_sequence != last_written_sequence
                     if sequence_changed:
                         write_armed = True
                     should_write = sequence_changed if write_config["mode"] == "on_change" else write_armed
-                    if should_write:
-                        client.write_continuous(write_config["address"], write_data)
-                        bridge.acknowledge_write(write_sequence)
-                        bridge.set_status(write_ok=True, error_code=0)
-                        last_written_sequence = write_sequence
-                        self._status.increment("write_count")
-                        self._status.update(last_write_at=utc_now())
+                    if not write_enabled:
+                        paused_write_sequence = write_sequence
+                    elif should_write and write_sequence != paused_write_sequence:
+                        if not bridge.controller_write_enabled():
+                            paused_write_sequence = write_sequence
+                        elif bridge.read_write_area()[1] == write_sequence:
+                            # A gate transition may have followed the copied TX
+                            # snapshot. Never authorize those older bytes with
+                            # a newer Core commit's gate.
+                            client.write_continuous(write_config["address"], write_data)
+                            bridge.acknowledge_write(write_sequence)
+                            bridge.set_status(write_ok=True, error_code=0)
+                            last_written_sequence = write_sequence
+                            paused_write_sequence = None
+                            self._status.increment("write_count")
+                            self._status.update(last_write_at=utc_now())
                     next_write = time.monotonic() + write_config["interval_ms"] / 1000.0
                     did_work = True
 

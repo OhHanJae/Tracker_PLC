@@ -73,6 +73,10 @@ with SharedMemoryClient("xgt_gateway_v1") as memory:
 
 자세한 레이아웃은 [docs/SHARED_MEMORY.md](docs/SHARED_MEMORY.md)를 참고하세요.
 
+Core 연동 시 `RUN_ENABLE(D+0.0)`은 Controller→PLC 쓰기 허가입니다. OFF에서도 Gateway의 PLC 읽기는 계속됩니다. Core는 OFF 동안 TX를 커밋하지 않으며, ON 복귀 시 최신 TX를 먼저 커밋하고 쓰기를 허용합니다. Gateway는 `cyclic`·`on_change` 모두에서 허가를 확인하고, OFF 동안 물리 WRITE와 ACK 갱신을 멈춥니다. OFF를 관측한 뒤에는 새 TX sequence가 생겨야 재개하므로 이전 cyclic 프레임을 재전송하지 않습니다.
+
+이 허가는 기존 64바이트 헤더와 RX/TX 100 WORD를 바꾸지 않고, 두 데이터 영역의 끝을 4바이트 경계로 올림한 위치의 추가 4바이트(`CWG0`/`CWG1`)를 사용합니다. Core 연동 시 SHM 크기는 `align4(max(read_offset+read_length, write_offset+write_length))+4` 이상이어야 합니다. 기본 배치에서는 최소 468바이트이며 기본 크기 512바이트면 충분합니다. 확장이 없는 일반 producer의 기존 동작과 464바이트 레이아웃은 유지됩니다. Core 확장이 있으면 Gateway의 연결·최근 읽기 성공 상태와 수신한 RUN bit도 함께 확인합니다. 허가 판단 전에 이미 전송 중인 XGT 요청을 회수하는 기능은 아닙니다.
+
 ## 설정 방법
 
 ### 웹
