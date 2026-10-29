@@ -122,3 +122,7 @@ Windows PowerShell에서는 ` $env:PYTHONPATH='src'; python -m unittest discover
 - [TCP 설정 프로토콜과 HTTP API](docs/CONTROL_PROTOCOL.md)
 - [공유 메모리 레이아웃](docs/SHARED_MEMORY.md)
 - [Windows/Linux 서비스 운용](docs/DEPLOYMENT.md)
+
+## PLC 알람 v7
+
+현재 규격은 v7이다. D+21 코어, D+22 PTM, D+23 비전, D+24 PLC가 각각 1 WORD이며 상위 BYTE=오류, 하위 BYTE=경고다. 모듈 안에서 오류·경고를 각각 우선순위 1건씩 표시한다. D+25는 알람 순번, D+27/28은 전체 원인 개수, D+20/26/50~79는 Reserved(0)다. 전체 전송은 방향별 100 WORD입니다. [코드 규격](../core/docs/PLC_ALARM_CODES_V7.md)과 `1. 계획,설계/03_PLC_알람_v7_변경_안내서.docx`를 따릅니다. PLC/HMI도 v7의 모듈·오류/경고 BYTE로 해석해야 합니다.
